@@ -1,0 +1,46 @@
+# Raw data (never commit)
+data/
+
+# Zip archives
+*.zip
+*.gz
+*.tar
+
+# Model weights
+*.pt
+*.ckpt
+*.bin
+*.safetensors
+
+# Numpy arrays
+*.npy
+*.npz
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# Env
+.env
+.venv/
+venv/
+
+# Submissions (generated, not source)
+submissions/
+
+# Logs
+*.log
