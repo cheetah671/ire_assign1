@@ -35,6 +35,7 @@ from src.data.schema import (
     COL_USER_ID,
     SPLIT_TRAIN,
     SPLIT_VAL,
+    SPLIT_TEST,
 )
 from src.evaluation.metrics import (
     compute_ranking_metrics,
@@ -225,7 +226,7 @@ def main() -> None:
         help="Which dataset to evaluate.",
     )
     parser.add_argument(
-        "--ranker", choices=["bm25", "emb"], default="bm25",
+        "--ranker", choices=["bm25", "emb", "both"], default="bm25",
         help="Which ranker's predictions to evaluate.",
     )
     parser.add_argument(
@@ -245,39 +246,46 @@ def main() -> None:
     }
     targets = dataset_map[args.dataset]
 
+    ranker_map = {
+        "bm25": ["bm25"],
+        "emb":  ["emb"],
+        "both": ["bm25", "emb"],
+    }
+    rankers = ranker_map[args.ranker]
+
     RESULTS_DIR.mkdir(parents=True, exist_ok=True)
 
-    all_rows = []
-    for name in targets:
-        rows = evaluate_dataset(
-            dataset_name=name,
-            ranker=args.ranker,
-            run_bootstrap=not args.no_bootstrap,
-            bootstrap_n=args.bootstrap_n,
-        )
-        all_rows.extend(rows)
+    for ranker in rankers:
+        all_rows = []
+        for name in targets:
+            rows = evaluate_dataset(
+                dataset_name=name,
+                ranker=ranker,
+                run_bootstrap=not args.no_bootstrap,
+                bootstrap_n=args.bootstrap_n,
+            )
+            all_rows.extend(rows)
 
-    if not all_rows:
-        logger.error("No results produced.")
-        return
+        if not all_rows:
+            logger.error(f"No results produced for ranker={ranker}.")
+            continue
 
-    results_df = pd.DataFrame(all_rows)
+        results_df = pd.DataFrame(all_rows)
 
-    # ── Print summary table ────────────────────────────────────────────
-    logger.info("\n" + "=" * 80)
-    logger.info("Q4 EVALUATION RESULTS SUMMARY")
-    logger.info("=" * 80)
+        # ── Print summary table ──────────────────────────────────────────────────
+        logger.info("\n" + "=" * 80)
+        logger.info(f"Q4 EVALUATION RESULTS SUMMARY  [{ranker.upper()}]")
+        logger.info("=" * 80)
 
-    # Only show core metric columns for readability in the log
-    core_cols = ["dataset", "ranker", "slice", "auc", "mrr", "ndcg5", "ndcg10",
-                 "novelty", "coverage", "ild"]
-    display_cols = [c for c in core_cols if c in results_df.columns]
-    logger.info("\n" + results_df[display_cols].to_string(index=False))
+        core_cols = ["dataset", "ranker", "slice", "auc", "mrr", "ndcg5", "ndcg10",
+                     "novelty", "coverage", "ild"]
+        display_cols = [c for c in core_cols if c in results_df.columns]
+        logger.info("\n" + results_df[display_cols].to_string(index=False))
 
-    # ── Save full results (including CI bounds) ────────────────────────
-    out_path = RESULTS_DIR / f"evaluation_{args.ranker}.csv"
-    results_df.to_csv(out_path, index=False)
-    logger.info(f"\nFull results saved → {out_path}")
+        # ── Save full results (including CI bounds) ────────────────────────────
+        out_path = RESULTS_DIR / f"evaluation_{ranker}.csv"
+        results_df.to_csv(out_path, index=False)
+        logger.info(f"\nFull results saved → {out_path}")
 
 
 if __name__ == "__main__":
