@@ -61,7 +61,7 @@ def load_word2vec_vectors(zip_path: Path) -> dict:
 def build_user_vectors(history_path: Path, w2v: dict) -> dict:
     """Load history.parquet and compute mean-pooled vectors per user."""
     logger.info(f"Loading history from {history_path.name} ...")
-    hist = pd.read_parquet(history_path, columns=["user_id", "article_id_fixed"])
+    hist = pd.read_parquet(history_path, columns=["user_id", "article_id_fixed", "read_time_fixed", "scroll_percentage_fixed"])
     
     user_vecs = {}
     logger.info("Computing user vectors...")
@@ -70,15 +70,35 @@ def build_user_vectors(history_path: Path, w2v: dict) -> dict:
     for row in tqdm(hist.itertuples(index=False), total=len(hist), desc="User Vectors"):
         uid = row.user_id
         art_ids = row.article_id_fixed
+        read_times = row.read_time_fixed
+        scrolls = row.scroll_percentage_fixed
         
         if art_ids is None or len(art_ids) == 0:
             continue
             
-        # Get vectors for clicked articles (only keep those present in w2v)
-        clicked_vecs = [w2v[aid] for aid in art_ids if aid in w2v]
+        clicked_vecs = []
+        weights = []
+        
+        # Time decay weight (chronological order, more recent = higher weight)
+        n = len(art_ids)
+        base_weights = np.linspace(0.5, 1.5, n)
+        
+        for i, aid in enumerate(art_ids):
+            if aid in w2v:
+                # Engagement weighting
+                rt = read_times[i] if not np.isnan(read_times[i]) else 10.0
+                rt_w = min(rt / 30.0, 2.0)  # Cap read time weight multiplier
+                
+                sc = scrolls[i] if not np.isnan(scrolls[i]) else 50.0
+                sc_w = sc / 100.0
+                
+                w = base_weights[i] * (1.0 + rt_w + sc_w)
+                
+                clicked_vecs.append(w2v[aid])
+                weights.append(w)
         
         if clicked_vecs:
-            u_vec = np.mean(clicked_vecs, axis=0)
+            u_vec = np.average(clicked_vecs, axis=0, weights=weights)
             norm = np.linalg.norm(u_vec)
             if norm > 0:
                 u_vec /= norm
