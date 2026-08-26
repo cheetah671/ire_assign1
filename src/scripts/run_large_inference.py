@@ -14,6 +14,7 @@ import zipfile
 from pathlib import Path
 from time import perf_counter
 
+import numpy as np
 import pandas as pd
 from tqdm import tqdm
 
@@ -112,7 +113,7 @@ def main():
                 scores_dict = ranker.score_candidates(query_tokens, candidates)
             else:
                 # Embedding Ranker
-                # Manually mean-pool the embeddings of the history
+                # Recency-weighted mean-pool: articles at end of history are more recent
                 vecs = []
                 for aid in history:
                     idx = ranker.id_to_idx.get(str(aid))
@@ -120,8 +121,11 @@ def main():
                         vecs.append(ranker.matrix[idx])
                 
                 if vecs:
-                    import numpy as np
-                    user_vec = np.mean(vecs, axis=0)
+                    n = len(vecs)
+                    # Linear recency weights: oldest=0.5, newest=1.5
+                    weights = np.linspace(0.5, 1.5, n, dtype=np.float32)
+                    vecs_arr = np.array(vecs, dtype=np.float32)
+                    user_vec = np.average(vecs_arr, axis=0, weights=weights)
                     norm = np.linalg.norm(user_vec)
                     if norm > 0:
                         user_vec /= norm
